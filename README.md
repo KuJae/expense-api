@@ -1,6 +1,9 @@
 # 지출 관리 API (expense-api)
 
-**배포 URL:** _Render 배포 후 기입_ · Swagger UI: `<배포 URL>/docs`
+**배포 URL:** <https://expense-api-32zr.onrender.com> · **Swagger UI:** <https://expense-api-32zr.onrender.com/docs>
+
+> Render 무료 플랜이라 15분간 요청이 없으면 잠듭니다. 첫 접속은 깨어나는 데 30~60초 걸릴 수 있고,
+> 임시 저장소(메모리)라 그때 등록해 둔 거래도 함께 사라집니다 — 둘 다 정상이며 영속화는 4주차입니다.
 
 클라우드컴퓨팅실습 3주차 실습 기록입니다.
 가계부(지출 관리) CRUD API를 FastAPI로 처음부터 만들어 Render에 배포했습니다.
@@ -58,55 +61,64 @@ fastapi dev app/main.py          # http://127.0.0.1:8000/docs
 
 ---
 
-# 실습 기록
+## 실습 기록
 
-## ① 결과 확인
+### ① 결과 확인
 
-`/docs`에서 등록 → 조회 → 삭제를 돌리고, 지운 id를 다시 조회하면 404가 나는 것을 확인했습니다.
+등록 → 조회 → 삭제를 돌리고, 지운 id를 다시 조회하면 404가 나는 것을 확인했습니다.
+아래는 **Render에 배포한 인터넷 주소**(`https://expense-api-32zr.onrender.com`)로 돌린 결과입니다.
+
+Swagger UI — <https://expense-api-32zr.onrender.com/docs>
 
 ![Swagger UI](docs/swagger-ui.png)
 
-같은 흐름을 터미널에서도 확인한 기록입니다.
-
 ```console
-$ curl -s http://127.0.0.1:8000/
+$ R=https://expense-api-32zr.onrender.com
+
+$ curl -s $R/
 {"message":"지출 관리 API에 오신 것을 환영합니다"}
 
-$ curl -s http://127.0.0.1:8000/health
+$ curl -s $R/health
 {"status":"ok"}
 
 # 등록 — 201, 서버가 id 와 created_at 을 채워 준다
-$ curl -i -X POST http://127.0.0.1:8000/transactions \
+$ curl -i -X POST $R/transactions \
     -H 'Content-Type: application/json' \
     -d '{"amount":12000,"type":"expense","category":"식비","description":"점심","occurred_on":"2026-09-15"}'
 HTTP/1.1 201 Created
 {"id":1,"amount":12000.0,"type":"expense","category":"식비","description":"점심",
- "occurred_on":"2026-09-15","created_at":"2026-09-20T23:50:16.912397"}
+ "occurred_on":"2026-09-15","created_at":"2026-09-20T14:56:20.681370"}
+
+# 목록 — 200
+$ curl -s $R/transactions
+[{"id":1,"category":"식비","amount":12000.0,...},{"id":2,"category":"교통","amount":3200.0,...}]
 
 # 단건 조회 — 200
-$ curl -s http://127.0.0.1:8000/transactions/2
-{"id":2,"amount":3200.0,"type":"expense","category":"교통","description":null,
- "occurred_on":"2026-09-16","created_at":"2026-09-20T23:50:16.920598"}
+$ curl -i $R/transactions/1
+HTTP/1.1 200 OK
 
 # 없는 id 조회 — 404
-$ curl -i http://127.0.0.1:8000/transactions/999
+$ curl -i $R/transactions/999
 HTTP/1.1 404 Not Found
 {"detail":"999번 거래를 찾을 수 없습니다"}
 
+# id 가 정수가 아님 — 422
+$ curl -i $R/transactions/abc
+HTTP/1.1 422 Unprocessable Content
+
 # 삭제 — 204 (본문 없음)
-$ curl -i -X DELETE http://127.0.0.1:8000/transactions/2
+$ curl -i -X DELETE $R/transactions/2
 HTTP/1.1 204 No Content
 
 # 지운 id 를 다시 삭제 — 404
-$ curl -i -X DELETE http://127.0.0.1:8000/transactions/2
+$ curl -i -X DELETE $R/transactions/2
 HTTP/1.1 404 Not Found
-{"detail":"2번 거래를 찾을 수 없습니다"}
 ```
 
 **일부러 틀린 값을 보냈을 때 (422)** — 세 가지 위반을 한 번에 잡아냅니다.
 
 ```console
-$ curl -i -X POST http://127.0.0.1:8000/transactions \
+$ curl -i -X POST $R/transactions \
     -H 'Content-Type: application/json' \
     -d '{"amount":-1,"type":"unknown","category":"","occurred_on":"2026-09-15"}'
 HTTP/1.1 422 Unprocessable Content
@@ -118,7 +130,7 @@ HTTP/1.1 422 Unprocessable Content
 경로 매개변수도 같습니다 — `GET /transactions/abc`는 `int`로 바꿀 수 없어 **422**입니다.
 검증 코드를 한 줄도 쓰지 않았는데 막혔고, `create_transaction` 함수 본문은 실행조차 되지 않았습니다.
 
-## ② 핵심 개념 되새김
+### ② 핵심 개념 되새김
 
 - **CRUD 네 동작과 HTTP 메서드** — 만들기는 POST, 읽기는 GET, 고치기는 PUT/PATCH, 지우기는 DELETE다.
   "무엇을" 할지는 경로(`/transactions/3`)가, "어떻게" 할지는 메서드가 나눠 맡아서 같은 주소로도 다른 일을 시킬 수 있다.
@@ -129,7 +141,7 @@ HTTP/1.1 422 Unprocessable Content
   FastAPI가 읽어 `/openapi.json`을 만들고, Swagger UI가 그 JSON을 그려 준 것이다.
   문서를 만드는 코드는 한 줄도 쓰지 않았고, 코드를 고치면 문서도 같이 바뀐다.
 
-## ③ 자유 로그
+### ③ 자유 로그
 
 <!-- 아래는 초안입니다. 본인 경험에 맞게 고쳐 쓰세요. -->
 
@@ -147,6 +159,11 @@ HTTP/1.1 422 Unprocessable Content
 정해져서 오히려 찾기 쉬워졌다. 대신 옮길 때 `@app.` 을 `@router.` 로 바꾸는 걸 놓치기 쉬워 보여서
 옮긴 뒤에 파일을 한 번 훑으며 확인했다.
 
+**Render 배포**는 2주차와 절차가 같았지만 Start Command 한 곳이 달랐다. 2주차 메모 앱은
+`uvicorn main:app` 이었는데, 이번엔 단계 5에서 코드를 `app/` 패키지로 옮겼으니
+`uvicorn app.main:app` 이어야 한다. 워크북이 "2주차 것을 그대로 적으면 실패한다"고 미리 짚어 준
+덕분에 502를 안 만났다. 코드는 한 줄도 안 고치고 인터넷에 올라갔다는 게 신기했다.
+
 아직 안 풀린 것: 데이터가 서버를 끄면 사라진다. 워크북 심화 블록에 SQLite로 바꾸는 방법이 있는데
 4주차가 정식이라고 해서 이번엔 넘겼다. 그리고 Render 무료 플랜이 15분마다 잠드는 것도, 지금은
 "정상"이라고 하니 넘어가지만 실제 서비스라면 어떻게 하는지는 아직 모르겠다.
@@ -157,3 +174,4 @@ HTTP/1.1 422 Unprocessable Content
 다시 지우면 404인지를 하나씩 호출해 응답 코드와 본문을 눈으로 확인했다(위 ① 기록이 그 결과다).
 일부러 틀린 값 세 개를 한 번에 보내 422 메시지가 세 건 다 나오는지도 확인했다.
 `main.py`에 `@app.` 으로 시작하는 줄이 몇 개인지 세어 워크북 완성본과 대조하는 것도 해 봤다.
+Render 배포 뒤에는 같은 확인을 **인터넷 주소로 한 번 더** 돌려 로컬과 응답이 같은지 봤다(위 ① 기록).
