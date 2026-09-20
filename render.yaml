@@ -1,0 +1,13 @@
+# (워크북에는 없는 추가분) Render Blueprint —
+# 대시보드에서 New → Blueprint 로 읽히면 아래 설정이 자동으로 채워진다.
+# New → Web Service 로 직접 만들 때도 같은 값을 폼에 넣으면 된다.
+services:
+  - type: web
+    name: expense-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # 단계 5에서 app/ 패키지로 옮겼으므로 main:app 이 아니라 app.main:app 이다.
+    # --host 0.0.0.0 이 없으면 외부에서 접근이 안 되고,
+    # --port 를 숫자로 고정하면 502 가 난다($PORT 를 그대로 써야 한다).
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
